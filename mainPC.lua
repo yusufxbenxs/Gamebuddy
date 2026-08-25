@@ -1,4 +1,4 @@
--- GameBuddy (GB) - PC Edition (Xeno Executor, Default Model: gemini-3.5-flash-lite, Saved Keys + RevertSmart + Reuse Prompt Button)
+-- GameBuddy (GB) - PC Edition (Xeno Executor, Default Model: gemini-3.5-flash-lite, Saved Keys + RevertSmart + Fixed Reuse Button)
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local HttpService = game:GetService("HttpService")
@@ -13,7 +13,6 @@ local KEY_FILE_NAME = "GameBuddy_PC_SavedKeys.json"
 local HISTORY_FILE_NAME = "GameBuddy_PC_ChatHistory.json"
 local DEFAULT_API_KEY = ""
 local savedKeysList = {}
-
 local workspaceStateBackups = {}
 
 local function loadSavedKeys()
@@ -22,18 +21,12 @@ local function loadSavedKeys()
             return HttpService:JSONDecode(readfile(KEY_FILE_NAME))
         end
     end)
-    if success and type(result) == "table" and #result > 0 then
-        return result
-    end
+    if success and type(result) == "table" and #result > 0 then return result end
     return {DEFAULT_API_KEY}
 end
 
 local function saveKeysToFile(keysTable)
-    pcall(function()
-        if writefile then
-            writefile(KEY_FILE_NAME, HttpService:JSONEncode(keysTable))
-        end
-    end)
+    pcall(function() if writefile then writefile(KEY_FILE_NAME, HttpService:JSONEncode(keysTable)) end end)
 end
 
 local function loadChatHistoryFile()
@@ -42,18 +35,12 @@ local function loadChatHistoryFile()
             return HttpService:JSONDecode(readfile(HISTORY_FILE_NAME))
         end
     end)
-    if success and type(result) == "table" then
-        return result
-    end
+    if success and type(result) == "table" then return result end
     return nil
 end
 
 local function saveChatHistory(historyTable)
-    pcall(function()
-        if writefile then
-            writefile(HISTORY_FILE_NAME, HttpService:JSONEncode(historyTable))
-        end
-    end)
+    pcall(function() if writefile then writefile(HISTORY_FILE_NAME, HttpService:JSONEncode(historyTable)) end end)
 end
 
 savedKeysList = loadSavedKeys()
@@ -61,8 +48,7 @@ local ACTIVE_API_KEY = savedKeysList[1] or DEFAULT_API_KEY
 local SELECTED_MODEL = "gemini-3.5-flash-lite"
 local conversationHistory = {}
 local rawStoredHistory = loadChatHistoryFile()
-
-local CURRENT_EXACT_DATE = "August 24, 2026"
+local CURRENT_EXACT_DATE = "August 25, 2026"
 
 local SYSTEM_INSTRUCTION = string.format([[
 You are GameBuddy (GB), an elite AI assistant built directly into the player's Roblox PC executor client (Xeno Executor).
@@ -73,25 +59,19 @@ CURRENT LOCAL PLAYER CONTEXT:
 - Exact Date: %s
 
 CAPABILITIES & PROTOCOLS:
-1. CODE EXECUTION ([LUA]): When requested to make workspace changes or test modifications, write Luau code and wrap it cleanly in:
+1. CODE EXECUTION ([LUA]): When requested to make workspace changes or test modifications, write Luau code wrapped cleanly in:
 [LUA]
 local info = "Success"
 return info
 [/LUA]
-Always make sure your snippet `return`s a description of what was done or verification data so it can be checked. If verification fails or errors occur, you will receive feedback and must fix your approach iteratively.
+Return verification data or status strings.
 
-2. EXECUTION ENVIRONMENT DIFFERENCES: You are running on a PC environment via Xeno Executor. Take advantage of full Windows capabilities, multi-threading, and robust PC execution speeds.
+2. REVERSION PROTOCOLS:
+- Standard "revert" / "undo": Restores properties via snapshot backup tables.
+- Smart Revert ("reverts/revertsmart"): Analyze past changes and write an intelligent clean-up [LUA] script.
+]], localPlayer.Name, localPlayer.DisplayName, localPlayer.UserId, CURRENT_EXACT_DATE)
 
-3. TIME AWARENESS & SEARCH PROTOCOL: The exact date right now is %s. Your knowledge cutoff might be older. If you think the user requested something whose APIs or behaviors could have changed, search the internet/knowledge base to ensure accuracy.
-
-4. REVERSION PROTOCOLS:
-- Standard "revert" / "undo": Restores properties via the snapshot backup table.
-- Smart Revert ("reverts/revertsmart"): You analyze what was changed based on chat history and write a custom [LUA] script specifically engineered to intelligently undo, clean up, or reverse effects in the workspace dynamically.
-]], localPlayer.Name, localPlayer.DisplayName, localPlayer.UserId, CURRENT_EXACT_DATE, CURRENT_EXACT_DATE)
-
-if CoreGui:FindFirstChild("GameBuddyPCGUI") then 
-    CoreGui.GameBuddyPCGUI:Destroy() 
-end
+if CoreGui:FindFirstChild("GameBuddyPCGUI") then CoreGui.GameBuddyPCGUI:Destroy() end
 
 local sg = Instance.new("ScreenGui")
 sg.Name = "GameBuddyPCGUI"
@@ -99,7 +79,6 @@ sg.ResetOnSpawn = false
 sg.DisplayOrder = 999999
 sg.Parent = CoreGui
 
--- PC Toggle Key Notice / Floating Button
 local toggleBtn = Instance.new("TextButton")
 toggleBtn.Size = UDim2.new(0, 48, 0, 48)
 toggleBtn.Position = UDim2.new(0.01, 0, 0.2, 0)
@@ -146,16 +125,10 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Toggle visibility via Right Control key or floating button
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if input.KeyCode == Enum.KeyCode.RightControl then
-        window.Visible = not window.Visible
-    end
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.RightControl then window.Visible = not window.Visible end
 end)
-
-toggleBtn.MouseButton1Click:Connect(function()
-    window.Visible = not window.Visible
-end)
+toggleBtn.MouseButton1Click:Connect(function() window.Visible = not window.Visible end)
 
 local header = Instance.new("Frame")
 header.Size = UDim2.new(1, 0, 0, 40)
@@ -183,14 +156,8 @@ closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 closeBtn.Font = Enum.Font.GothamBold
 closeBtn.TextSize = 14
 closeBtn.Parent = header
-
-local closeCorner = Instance.new("UICorner")
-closeCorner.CornerRadius = UDim.new(0, 6)
-closeCorner.Parent = closeBtn
-
-closeBtn.MouseButton1Click:Connect(function()
-    sg:Destroy()
-end)
+Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 6)
+closeBtn.MouseButton1Click:Connect(function() sg:Destroy() end)
 
 local minimizeBtn = Instance.new("TextButton")
 minimizeBtn.Size = UDim2.new(0, 28, 0, 28)
@@ -201,22 +168,14 @@ minimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 minimizeBtn.Font = Enum.Font.GothamBold
 minimizeBtn.TextSize = 16
 minimizeBtn.Parent = header
-
-local minCorner = Instance.new("UICorner")
-minCorner.CornerRadius = UDim.new(0, 6)
-minCorner.Parent = minimizeBtn
-
-minimizeBtn.MouseButton1Click:Connect(function()
-    window.Visible = false
-end)
+Instance.new("UICorner", minimizeBtn).CornerRadius = UDim.new(0, 6)
+minimizeBtn.MouseButton1Click:Connect(function() window.Visible = false end)
 
 local buildSetupUI, buildChatUI, buildMemoryPromptUI
 
 buildSetupUI = function()
     for _, child in ipairs(window:GetChildren()) do
-        if child ~= header and child ~= winCorner then
-            child:Destroy()
-        end
+        if child ~= header and child ~= winCorner then child:Destroy() end
     end
     title.Text = "GameBuddy Setup (Xeno PC)"
 
@@ -249,10 +208,7 @@ buildSetupUI = function()
     modelBtn.TextSize = 12
     modelBtn.TextXAlignment = Enum.TextXAlignment.Left
     modelBtn.Parent = setupScroll
-
-    local mCorner = Instance.new("UICorner")
-    mCorner.CornerRadius = UDim.new(0, 6)
-    mCorner.Parent = modelBtn
+    Instance.new("UICorner", modelBtn).CornerRadius = UDim.new(0, 6)
 
     local modelListFrame = Instance.new("ScrollingFrame")
     modelListFrame.Size = UDim2.new(1, 0, 0, 110)
@@ -263,12 +219,10 @@ buildSetupUI = function()
     modelListFrame.ZIndex = 5
     modelListFrame.Parent = setupScroll
 
-    local mLayout = Instance.new("UIListLayout")
+    local mLayout = Instance.new("UIListLayout", modelListFrame)
     mLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    mLayout.Parent = modelListFrame
 
-    local models = {"gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash-lite"}
-    for _, mName in ipairs(models) do
+    for _, mName in ipairs({"gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash-lite"}) do
         local opt = Instance.new("TextButton")
         opt.Size = UDim2.new(1, 0, 0, 28)
         opt.BackgroundColor3 = Color3.fromRGB(35, 39, 50)
@@ -279,17 +233,13 @@ buildSetupUI = function()
         opt.TextXAlignment = Enum.TextXAlignment.Left
         opt.ZIndex = 6
         opt.Parent = modelListFrame
-        
         opt.MouseButton1Click:Connect(function()
             SELECTED_MODEL = mName
             modelBtn.Text = "  " .. mName
             modelListFrame.Visible = false
         end)
     end
-
-    modelBtn.MouseButton1Click:Connect(function()
-        modelListFrame.Visible = not modelListFrame.Visible
-    end)
+    modelBtn.MouseButton1Click:Connect(function() modelListFrame.Visible = not modelListFrame.Visible end)
 
     local keyLbl = Instance.new("TextLabel")
     keyLbl.Size = UDim2.new(1, 0, 0, 22)
@@ -314,10 +264,7 @@ buildSetupUI = function()
     keyBox.TextSize = 12
     keyBox.ClearTextOnFocus = false
     keyBox.Parent = setupScroll
-
-    local kCorner = Instance.new("UICorner")
-    kCorner.CornerRadius = UDim.new(0, 6)
-    kCorner.Parent = keyBox
+    Instance.new("UICorner", keyBox).CornerRadius = UDim.new(0, 6)
 
     local savedKeysBtn = Instance.new("TextButton")
     savedKeysBtn.Size = UDim2.new(1, 0, 0, 28)
@@ -329,10 +276,7 @@ buildSetupUI = function()
     savedKeysBtn.TextSize = 11
     savedKeysBtn.TextXAlignment = Enum.TextXAlignment.Left
     savedKeysBtn.Parent = setupScroll
-
-    local skCorner = Instance.new("UICorner")
-    skCorner.CornerRadius = UDim.new(0, 6)
-    skCorner.Parent = savedKeysBtn
+    Instance.new("UICorner", savedKeysBtn).CornerRadius = UDim.new(0, 6)
 
     local savedKeysScroll = Instance.new("ScrollingFrame")
     savedKeysScroll.Size = UDim2.new(1, 0, 0, 90)
@@ -344,10 +288,8 @@ buildSetupUI = function()
     savedKeysScroll.ScrollBarThickness = 4
     savedKeysScroll.Parent = setupScroll
 
-    local skLayout = Instance.new("UIListLayout")
+    local skLayout = Instance.new("UIListLayout", savedKeysScroll)
     skLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    skLayout.Parent = savedKeysScroll
-
     skLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
         savedKeysScroll.CanvasSize = UDim2.new(0, 0, 0, skLayout.AbsoluteContentSize.Y)
     end)
@@ -364,17 +306,13 @@ buildSetupUI = function()
             keyOption.TextXAlignment = Enum.TextXAlignment.Left
             keyOption.ZIndex = 6
             keyOption.Parent = savedKeysScroll
-
             keyOption.MouseButton1Click:Connect(function()
                 keyBox.Text = storedKey
                 savedKeysScroll.Visible = false
             end)
         end
     end
-
-    savedKeysBtn.MouseButton1Click:Connect(function()
-        savedKeysScroll.Visible = not savedKeysScroll.Visible
-    end)
+    savedKeysBtn.MouseButton1Click:Connect(function() savedKeysScroll.Visible = not savedKeysScroll.Visible end)
 
     local startChatBtn = Instance.new("TextButton")
     startChatBtn.Size = UDim2.new(1, 0, 0, 40)
@@ -385,33 +323,23 @@ buildSetupUI = function()
     startChatBtn.Font = Enum.Font.GothamBold
     startChatBtn.TextSize = 14
     startChatBtn.Parent = setupScroll
-
-    local startCorner = Instance.new("UICorner")
-    startCorner.CornerRadius = UDim.new(0, 8)
-    startCorner.Parent = startChatBtn
+    Instance.new("UICorner", startChatBtn).CornerRadius = UDim.new(0, 8)
 
     startChatBtn.MouseButton1Click:Connect(function()
         local inputtedKey = keyBox.Text:gsub("%s+", "")
         if inputtedKey == "" then return end
-        
         if inputtedKey ~= savedKeysList[1] then
             ACTIVE_API_KEY = inputtedKey
             table.insert(savedKeysList, 1, inputtedKey)
-            
-            local uniqueKeys = {}
-            local seen = {}
+            local uniqueKeys, seen = {}, {}
             for _, k in ipairs(savedKeysList) do
-                if not seen[k] and k ~= "" then
-                    seen[k] = true
-                    table.insert(uniqueKeys, k)
-                end
+                if not seen[k] and k ~= "" then seen[k] = true; table.insert(uniqueKeys, k) end
             end
             savedKeysList = uniqueKeys
             saveKeysToFile(savedKeysList)
         else
             ACTIVE_API_KEY = inputtedKey
         end
-        
         if rawStoredHistory and #rawStoredHistory > 0 then
             buildMemoryPromptUI()
         else
@@ -423,9 +351,7 @@ end
 
 buildMemoryPromptUI = function()
     for _, child in ipairs(window:GetChildren()) do
-        if child ~= header and child ~= winCorner then
-            child:Destroy()
-        end
+        if child ~= header and child ~= winCorner then child:Destroy() end
     end
     title.Text = "GameBuddy - Memory (Xeno PC)"
 
@@ -455,10 +381,7 @@ buildMemoryPromptUI = function()
     loadBtn.Font = Enum.Font.GothamBold
     loadBtn.TextSize = 15
     loadBtn.Parent = promptContainer
-
-    local lCorner = Instance.new("UICorner")
-    lCorner.CornerRadius = UDim.new(0, 8)
-    lCorner.Parent = loadBtn
+    Instance.new("UICorner", loadBtn).CornerRadius = UDim.new(0, 8)
 
     local newBtn = Instance.new("TextButton")
     newBtn.Size = UDim2.new(1, 0, 0, 45)
@@ -469,28 +392,15 @@ buildMemoryPromptUI = function()
     newBtn.Font = Enum.Font.GothamBold
     newBtn.TextSize = 15
     newBtn.Parent = promptContainer
+    Instance.new("UICorner", newBtn).CornerRadius = UDim.new(0, 8)
 
-    local nCorner = Instance.new("UICorner")
-    nCorner.CornerRadius = UDim.new(0, 8)
-    nCorner.Parent = newBtn
-
-    loadBtn.MouseButton1Click:Connect(function()
-        conversationHistory = rawStoredHistory
-        buildChatUI()
-    end)
-
-    newBtn.MouseButton1Click:Connect(function()
-        conversationHistory = {}
-        saveChatHistory(conversationHistory)
-        buildChatUI()
-    end)
+    loadBtn.MouseButton1Click:Connect(function() conversationHistory = rawStoredHistory; buildChatUI() end)
+    newBtn.MouseButton1Click:Connect(function() conversationHistory = {}; saveChatHistory(conversationHistory); buildChatUI() end)
 end
 
 buildChatUI = function()
     for _, child in ipairs(window:GetChildren()) do
-        if child ~= header and child ~= winCorner then
-            child:Destroy()
-        end
+        if child ~= header and child ~= winCorner then child:Destroy() end
     end
     title.Text = "GameBuddy (Xeno PC)"
 
@@ -503,30 +413,21 @@ buildChatUI = function()
     restartBtn.Font = Enum.Font.GothamBold
     restartBtn.TextSize = 13
     restartBtn.Parent = header
-
-    local rCorner = Instance.new("UICorner")
-    rCorner.CornerRadius = UDim.new(0, 6)
-    rCorner.Parent = restartBtn
-
-    restartBtn.MouseButton1Click:Connect(function()
-        buildSetupUI()
-    end)
+    Instance.new("UICorner", restartBtn).CornerRadius = UDim.new(0, 6)
+    restartBtn.MouseButton1Click:Connect(function() buildSetupUI() end)
 
     local inputFrame = Instance.new("Frame")
     inputFrame.Size = UDim2.new(1, -16, 0, 38)
     inputFrame.Position = UDim2.new(0, 8, 1, -46)
     inputFrame.BackgroundColor3 = Color3.fromRGB(28, 31, 40)
     inputFrame.Parent = window
-
-    local inputCorner = Instance.new("UICorner")
-    inputCorner.CornerRadius = UDim.new(0, 8)
-    inputCorner.Parent = inputFrame
+    Instance.new("UICorner", inputFrame).CornerRadius = UDim.new(0, 8)
 
     local chatBox = Instance.new("TextBox")
     chatBox.Size = UDim2.new(1, -45, 1, 0)
     chatBox.Position = UDim2.new(0, 10, 0, 0)
     chatBox.BackgroundTransparency = 1
-    chatBox.PlaceholderText = "Type a command or chat (Press Enter to send)..."
+    chatBox.PlaceholderText = "Type a command or chat..."
     chatBox.PlaceholderColor3 = Color3.fromRGB(120, 125, 140)
     chatBox.Text = ""
     chatBox.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -544,10 +445,7 @@ buildChatUI = function()
     sendBtn.Font = Enum.Font.GothamBold
     sendBtn.TextSize = 16
     sendBtn.Parent = inputFrame
-
-    local sendCorner = Instance.new("UICorner")
-    sendCorner.CornerRadius = UDim.new(0, 6)
-    sendCorner.Parent = sendBtn
+    Instance.new("UICorner", sendBtn).CornerRadius = UDim.new(0, 6)
 
     local actionToolbar = Instance.new("Frame")
     actionToolbar.Size = UDim2.new(1, -16, 0, 32)
@@ -564,20 +462,12 @@ buildChatUI = function()
     cptsBtn.Font = Enum.Font.GothamBold
     cptsBtn.TextSize = 11
     cptsBtn.Parent = actionToolbar
-
-    local cptsCorner = Instance.new("UICorner")
-    cptsCorner.CornerRadius = UDim.new(0, 6)
-    cptsCorner.Parent = cptsBtn
+    Instance.new("UICorner", cptsBtn).CornerRadius = UDim.new(0, 6)
 
     cptsBtn.MouseButton1Click:Connect(function()
         cptsEnabled = not cptsEnabled
-        if cptsEnabled then
-            cptsBtn.BackgroundColor3 = Color3.fromRGB(39, 174, 96)
-            cptsBtn.Text = "CPTS: ON"
-        else
-            cptsBtn.BackgroundColor3 = Color3.fromRGB(192, 57, 43)
-            cptsBtn.Text = "CPTS: OFF"
-        end
+        cptsBtn.BackgroundColor3 = cptsEnabled and Color3.fromRGB(39, 174, 96) or Color3.fromRGB(192, 57, 43)
+        cptsBtn.Text = cptsEnabled and "CPTS: ON" or "CPTS: OFF"
     end)
 
     local openTreeBtn = Instance.new("TextButton")
@@ -589,10 +479,70 @@ buildChatUI = function()
     openTreeBtn.Font = Enum.Font.GothamBold
     openTreeBtn.TextSize = 11
     openTreeBtn.Parent = actionToolbar
+    Instance.new("UICorner", openTreeBtn).CornerRadius = UDim.new(0, 6)
 
-    local treeCorner = Instance.new("UICorner")
-    treeCorner.CornerRadius = UDim.new(0, 6)
-    treeCorner.Parent = openTreeBtn
+    openTreeBtn.MouseButton1Click:Connect(function()
+        local treeWin = Instance.new("Frame")
+        treeWin.Size = UDim2.new(0, 360, 0, 400)
+        treeWin.Position = UDim2.new(0.5, -180, 0.5, -200)
+        treeWin.BackgroundColor3 = Color3.fromRGB(24, 26, 33)
+        treeWin.ZIndex = 20
+        treeWin.Parent = window
+        Instance.new("UICorner", treeWin).CornerRadius = UDim.new(0, 8)
+
+        local tHead = Instance.new("Frame", treeWin)
+        tHead.Size = UDim2.new(1, 0, 0, 35)
+        tHead.BackgroundColor3 = Color3.fromRGB(32, 35, 45)
+        Instance.new("UICorner", tHead).CornerRadius = UDim.new(0, 8)
+
+        local tTitle = Instance.new("TextLabel", tHead)
+        tTitle.Size = UDim2.new(1, -40, 1, 0)
+        tTitle.Position = UDim2.new(0, 10, 0, 0)
+        tTitle.BackgroundTransparency = 1
+        tTitle.Text = "Explorer Tree View"
+        tTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+        tTitle.Font = Enum.Font.GothamBold
+        tTitle.TextSize = 13
+        tTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+        local tClose = Instance.new("TextButton", tHead)
+        tClose.Size = UDim2.new(0, 24, 0, 24)
+        tClose.Position = UDim2.new(1, -28, 0, 5)
+        tClose.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+        tClose.Text = "X"
+        tClose.TextColor3 = Color3.fromRGB(255, 255, 255)
+        tClose.Font = Enum.Font.GothamBold
+        tClose.TextSize = 12
+        Instance.new("UICorner", tClose).CornerRadius = UDim.new(0, 4)
+        tClose.MouseButton1Click:Connect(function() treeWin:Destroy() end)
+
+        local tScroll = Instance.new("ScrollingFrame", treeWin)
+        tScroll.Size = UDim2.new(1, -12, 1, -45)
+        tScroll.Position = UDim2.new(0, 6, 0, 40)
+        tScroll.BackgroundTransparency = 1
+        tScroll.ScrollBarThickness = 4
+        
+        local tLayout = Instance.new("UIListLayout", tScroll)
+        tLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+        local function populate(parentObj, depth)
+            for _, child in ipairs(parentObj:GetChildren()) do
+                if child ~= sg then
+                    local itemBtn = Instance.new("TextButton", tScroll)
+                    itemBtn.Size = UDim2.new(1, 0, 0, 22)
+                    itemBtn.BackgroundTransparency = 1
+                    itemBtn.Text = string.rep("  ", depth) .. "📂 " .. child.Name .. " (" .. child.ClassName .. ")"
+                    itemBtn.TextColor3 = Color3.fromRGB(210, 215, 230)
+                    itemBtn.Font = Enum.Font.Gotham
+                    itemBtn.TextSize = 11
+                    itemBtn.TextXAlignment = Enum.TextXAlignment.Left
+                    if depth < 2 then populate(child, depth + 1) end
+                end
+            end
+        end
+        populate(Workspace, 0)
+        tScroll.CanvasSize = UDim2.new(0, 0, 0, tLayout.AbsoluteContentSize.Y)
+    end)
 
     local errorCheckBtn = Instance.new("TextButton")
     errorCheckBtn.Size = UDim2.new(0.31, 0, 1, 0)
@@ -603,10 +553,7 @@ buildChatUI = function()
     errorCheckBtn.Font = Enum.Font.GothamBold
     errorCheckBtn.TextSize = 11
     errorCheckBtn.Parent = actionToolbar
-
-    local errorCorner = Instance.new("UICorner")
-    errorCorner.CornerRadius = UDim.new(0, 6)
-    errorCorner.Parent = errorCheckBtn
+    Instance.new("UICorner", errorCheckBtn).CornerRadius = UDim.new(0, 6)
 
     local chatScroll = Instance.new("ScrollingFrame")
     chatScroll.Size = UDim2.new(1, -16, 1, -136)
@@ -617,11 +564,9 @@ buildChatUI = function()
     chatScroll.Active = true
     chatScroll.Parent = window
 
-    local chatLayout = Instance.new("UIListLayout")
+    local chatLayout = Instance.new("UIListLayout", chatScroll)
     chatLayout.Padding = UDim.new(0, 6)
     chatLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    chatLayout.Parent = chatScroll
-
     chatLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
         chatScroll.CanvasSize = UDim2.new(0, 0, 0, chatLayout.AbsoluteContentSize.Y + 10)
     end)
@@ -630,7 +575,7 @@ buildChatUI = function()
         local req = request or http_request or (http and http.request) or (syn and syn.request)
         if not req then return "⚠️ Error: Xeno request function not available." end
 
-        local url = string.format("[https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s](https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s)", SELECTED_MODEL, ACTIVE_API_KEY)
+        local url = string.format("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", SELECTED_MODEL, ACTIVE_API_KEY)
         table.insert(conversationHistory, { role = "user", parts = { { text = userPrompt } } })
         saveChatHistory(conversationHistory)
 
@@ -667,27 +612,16 @@ buildChatUI = function()
         local snapshot = {}
         for _, obj in ipairs(Workspace:GetDescendants()) do
             if obj:IsA("BasePart") then
-                table.insert(snapshot, {
-                    instance = obj,
-                    color = obj.Color,
-                    material = obj.Material,
-                    size = obj.Size,
-                    position = obj.Position,
-                    transparency = obj.Transparency
-                })
+                table.insert(snapshot, { instance = obj, color = obj.Color, material = obj.Material, size = obj.Size, position = obj.Position, transparency = obj.Transparency })
             end
         end
         table.insert(workspaceStateBackups, snapshot)
     end
 
     local function performReversion()
-        if #workspaceStateBackups == 0 then
-            return "⚠️ No previous workspace states available to revert."
-        end
-
+        if #workspaceStateBackups == 0 then return "⚠️ No previous workspace states available to revert." end
         local latestSnapshot = table.remove(workspaceStateBackups)
         local restoredCount = 0
-
         for _, data in ipairs(latestSnapshot) do
             if data.instance and data.instance.Parent then
                 pcall(function()
@@ -700,18 +634,12 @@ buildChatUI = function()
                 end)
             end
         end
-
-        local notificationPrompt = string.format("System Notice: The user triggered a state reversion. %d part properties were restored back to their pre-execution backups. Acknowledge this restoration to the user.", restoredCount)
-        return callGeminiAPI(notificationPrompt)
+        return callGeminiAPI(string.format("System Notice: Reverted %d parts from snapshot. Acknowledge to user.", restoredCount))
     end
 
     local function executeWithSelfCorrection(code, loadingBubble, originalPrompt)
         captureWorkspaceBackup()
-
-        local maxTries = 4
-        local currentTry = 1
-        local activeCode = code
-        local fixHistoryLog = {}
+        local maxTries, currentTry, activeCode, fixHistoryLog = 4, 1, code, {}
 
         while currentTry <= maxTries do
             local recentLogs = {}
@@ -722,73 +650,31 @@ buildChatUI = function()
             end)
 
             local func, err = loadstring("return (function()\n" .. activeCode .. "\nend)()")
-            local execSuccess, execRes
-
-            if func then
-                execSuccess, execRes = pcall(func)
-            else
-                execSuccess = false
-                execRes = "Loadstring Compile Error: " .. tostring(err)
-            end
-
+            local execSuccess, execRes = (func and pcall(func)) or false, err or "Compile Error"
             task.wait(0.15)
             if logConn then logConn:Disconnect() end
 
-            local errorFound = false
-            local feedbackMsg = ""
-
+            local errorFound, feedbackMsg = false, ""
             if not execSuccess then
-                errorFound = true
-                feedbackMsg = "Execution Error: " .. tostring(execRes)
+                errorFound, feedbackMsg = true, "Execution Error: " .. tostring(execRes)
             elseif #recentLogs > 0 then
-                errorFound = true
-                feedbackMsg = "Console Warnings/Errors detected: " .. table.concat(recentLogs, " | ")
-            else
-                local verifySuccess, verifyRes = pcall(function()
-                    return tostring(execRes or "Executed successfully with no returned output.")
-                end)
-                if not verifySuccess then
-                    errorFound = true
-                    feedbackMsg = "Verification Output Error: " .. tostring(verifyRes)
-                end
+                errorFound, feedbackMsg = true, "Console Errors: " .. table.concat(recentLogs, " | ")
             end
 
             if not errorFound then
-                local fixSummaryDesc = ""
-                if #fixHistoryLog > 0 then
-                    fixSummaryDesc = " This was wrong initially (" .. table.concat(fixHistoryLog, "; ") .. "), but I fixed it by iterating and correcting the approach."
-                else
-                    fixSummaryDesc = " Executed cleanly on the first try."
-                end
-
-                local successReport = string.format("Task successfully verified and executed on attempt %d! Execution Result: %s. Now respond to the user: confirm success clearly, and state:%s", currentTry, tostring(execRes), fixSummaryDesc)
                 if loadingBubble then loadingBubble:Destroy() end
-                return callGeminiAPI(successReport)
+                return callGeminiAPI(string.format("Task successfully verified on attempt %d! Result: %s.", currentTry, tostring(execRes)))
             else
-                table.insert(fixHistoryLog, "Try " .. currentTry .. " failed due to: " .. feedbackMsg)
+                table.insert(fixHistoryLog, "Try " .. currentTry .. " failed: " .. feedbackMsg)
                 currentTry = currentTry + 1
-                
                 if currentTry <= maxTries then
-                    local retryText = string.format("<i>⚠️ Error: %s. Retrying (Attempt %d/%d)...</i>", feedbackMsg, currentTry, maxTries)
                     if loadingBubble then
                         local lbl = loadingBubble:FindFirstChildOfClass("TextLabel")
-                        if lbl then lbl.Text = retryText end
+                        if lbl then lbl.Text = string.format("<i>⚠️ Error: %s. Retrying (%d/%d)...</i>", feedbackMsg, currentTry, maxTries) end
                     end
-                    
-                    local correctionPrompt = string.format("Your previous code snippet failed with this error/warning: '%s'. Please fix the approach, write a completely new corrected [LUA] block addressing this issue, and try again.", feedbackMsg)
-                    local rawCorrection = callGeminiAPI(correctionPrompt)
-                    
+                    local rawCorrection = callGeminiAPI("Fix error: " .. feedbackMsg)
                     local newCode = rawCorrection:match("%[LUA%](.-)%[%/LUA%]") or rawCorrection:match("```lua%s*(.-)%s*```")
-                    if not newCode then
-                        local sPos, ePos = rawCorrection:find("%[LUA%]"), rawCorrection:find("%[%/LUA%]")
-                        if sPos and ePos then newCode = rawCorrection:sub(sPos + 5, ePos - 1) end
-                    end
-                    if newCode then
-                        activeCode = newCode
-                    else
-                        if loadingBubble then loadingBubble:Destroy() end
-                        return rawCorrection
-                    end
+                    if newCode then activeCode = newCode else if loadingBubble then loadingBubble:Destroy() end return rawCorrection end
                 else
                     if loadingBubble then loadingBubble:Destroy() end
                     return string.format("⚠️ Failed after %d attempts. Last error: %s", maxTries, feedbackMsg)
@@ -796,24 +682,13 @@ buildChatUI = function()
             end
         end
         if loadingBubble then loadingBubble:Destroy() end
-        return "⚠️ Maximum self-correction iterations reached."
+        return "⚠️ Max self-correction iterations reached."
     end
 
     local function processResponse(res, userPrompt)
         local code = res:match("%[LUA%](.-)%[%/LUA%]") or res:match("```lua%s*(.-)%s*```")
-        
-        if not code then
-            local startPos = res:find("%[LUA%]")
-            local endPos = res:find("%[%/LUA%]")
-            if startPos and endPos and startPos < endPos then
-                code = res:sub(startPos + 5, endPos - 1)
-            elseif startPos then
-                code = res:sub(startPos + 5)
-            end
-        end
-
         if code then
-            local loadingBubble = appendMessage("GameBuddy", "<i>Executing code and verifying workspace state changes...</i>", false)
+            local loadingBubble = appendMessage("GameBuddy", "<i>Executing code and verifying workspace changes...</i>", false)
             return executeWithSelfCorrection(code, loadingBubble, userPrompt)
         end
         return res:gsub("^%s*(.-)%s*$", "%1")
@@ -826,13 +701,10 @@ buildChatUI = function()
         bubble.BackgroundColor3 = isUser and Color3.fromRGB(41, 128, 185) or Color3.fromRGB(35, 39, 50)
         bubble.BorderSizePixel = 0
         bubble.Parent = chatScroll
-
-        local bCorner = Instance.new("UICorner")
-        bCorner.CornerRadius = UDim.new(0, 8)
-        bCorner.Parent = bubble
+        Instance.new("UICorner", bubble).CornerRadius = UDim.new(0, 8)
 
         local lbl = Instance.new("TextLabel")
-        lbl.Size = UDim2.new(1, isUser and -36 or -12, 1, -10)
+        lbl.Size = UDim2.new(1, isUser and -36 or -32, 1, -10)
         lbl.Position = UDim2.new(0, 6, 0, 5)
         lbl.BackgroundTransparency = 1
         lbl.Text = string.format("<b>%s:</b> %s", sender, text)
@@ -843,7 +715,7 @@ buildChatUI = function()
         lbl.Parent = bubble
 
         if not isUser then
-            local reuseBtn = Instance.new("TextButton")
+            local reuseBtn = Instance.new("TextButton", bubble)
             reuseBtn.Size = UDim2.new(0, 20, 0, 20)
             reuseBtn.Position = UDim2.new(1, -24, 0, 4)
             reuseBtn.BackgroundTransparency = 1
@@ -851,17 +723,15 @@ buildChatUI = function()
             reuseBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
             reuseBtn.Font = Enum.Font.Gotham
             reuseBtn.TextSize = 12
-            reuseBtn.Parent = bubble
 
             reuseBtn.MouseButton1Click:Connect(function()
-                chatBox.Text = text:gsub("<[^<>]+>", "")
+                -- Fixed: strips out HTML tags and inner formatting cleanly before filling chatBox
+                local cleanText = text:gsub("<[^<>]+>", ""):gsub("&lt;", "<"):gsub("&gt;", ">")
+                chatBox.Text = cleanText
             end)
         end
 
-        task.defer(function()
-            chatScroll.CanvasPosition = Vector2.new(0, chatScroll.AbsoluteCanvasSize.Y)
-        end)
-
+        task.defer(function() chatScroll.CanvasPosition = Vector2.new(0, chatScroll.AbsoluteCanvasSize.Y) end)
         return bubble
     end
 
@@ -869,14 +739,12 @@ buildChatUI = function()
         local txt = chatBox.Text
         if txt:match("^%s*$") then return end
         chatBox.Text = ""
-
         appendMessage(localPlayer.Name, txt, true)
 
-        local lowerTxt = txt:lower()
-        if lowerTxt == "revert" or lowerTxt == "undo" then
-            local loadingBubble = appendMessage("GameBuddy", "<i>Reverting previous workspace state changes...</i>", false)
+        if txt:lower() == "revert" or txt:lower() == "undo" then
+            local lb = appendMessage("GameBuddy", "<i>Reverting workspace...</i>", false)
             local res = performReversion()
-            loadingBubble:Destroy()
+            lb:Destroy()
             appendMessage("GameBuddy", processResponse(res, txt), false)
             return
         end
@@ -885,31 +753,20 @@ buildChatUI = function()
         task.spawn(function()
             local rawRes = callGeminiAPI(txt)
             loadingBubble:Destroy()
-            local finalRes = processResponse(rawRes, txt)
-            appendMessage("GameBuddy", finalRes, false)
+            appendMessage("GameBuddy", processResponse(rawRes, txt), false)
         end)
     end
 
     sendBtn.MouseButton1Click:Connect(sendQuery)
-    chatBox.FocusLost:Connect(function(enterPressed)
-        if enterPressed then sendQuery() end
-    end)
+    chatBox.FocusLost:Connect(function(enterPressed) if enterPressed then sendQuery() end end)
 
     if #conversationHistory > 0 then
         for _, msg in ipairs(conversationHistory) do
-            local senderName = (msg.role == "user") and localPlayer.Name or "GameBuddy"
-            local textContent = msg.parts and msg.parts[1] and msg.parts[1].text or ""
-            if textContent ~= "" then
-                appendMessage(senderName, textContent, msg.role == "user")
-            end
+            appendMessage((msg.role == "user") and localPlayer.Name or "GameBuddy", msg.parts[1].text, msg.role == "user")
         end
     else
         appendMessage("GameBuddy", "Hello " .. localPlayer.Name .. "! I am GameBuddy, your AI development assistant ready inside Xeno PC. How can I help you script or modify the game today?", false)
     end
 end
 
-if rawStoredHistory and #rawStoredHistory > 0 then
-    buildMemoryPromptUI()
-else
-    buildChatUI()
-end
+if rawStoredHistory and #rawStoredHistory > 0 then buildMemoryPromptUI() else buildChatUI() end
