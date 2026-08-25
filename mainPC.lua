@@ -188,6 +188,10 @@ local closeCorner = Instance.new("UICorner")
 closeCorner.CornerRadius = UDim.new(0, 6)
 closeCorner.Parent = closeBtn
 
+closeBtn.MouseButton1Click:Connect(function()
+    sg:Destroy()
+end)
+
 local minimizeBtn = Instance.new("TextButton")
 minimizeBtn.Size = UDim2.new(0, 28, 0, 28)
 minimizeBtn.Position = UDim2.new(1, -66, 0, 6)
@@ -201,6 +205,10 @@ minimizeBtn.Parent = header
 local minCorner = Instance.new("UICorner")
 minCorner.CornerRadius = UDim.new(0, 6)
 minCorner.Parent = minimizeBtn
+
+minimizeBtn.MouseButton1Click:Connect(function()
+    window.Visible = false
+end)
 
 local buildSetupUI, buildChatUI, buildMemoryPromptUI
 
@@ -622,7 +630,7 @@ buildChatUI = function()
         local req = request or http_request or (http and http.request) or (syn and syn.request)
         if not req then return "⚠️ Error: Xeno request function not available." end
 
-        local url = string.format("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", SELECTED_MODEL, ACTIVE_API_KEY)
+        local url = string.format("[https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s](https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s)", SELECTED_MODEL, ACTIVE_API_KEY)
         table.insert(conversationHistory, { role = "user", parts = { { text = userPrompt } } })
         saveChatHistory(conversationHistory)
 
@@ -799,6 +807,8 @@ buildChatUI = function()
             local endPos = res:find("%[%/LUA%]")
             if startPos and endPos and startPos < endPos then
                 code = res:sub(startPos + 5, endPos - 1)
+            elseif startPos then
+                code = res:sub(startPos + 5)
             end
         end
 
@@ -830,265 +840,76 @@ buildChatUI = function()
         lbl.Font = Enum.Font.Gotham
         lbl.TextSize = 13
         lbl.TextWrapped = true
-        lbl.RichText = true
-        lbl.TextXAlignment = Enum.TextXAlignment.Left
-        lbl.AutomaticSize = Enum.AutomaticSize.Y
         lbl.Parent = bubble
 
-        if isUser then
+        if not isUser then
             local reuseBtn = Instance.new("TextButton")
-            reuseBtn.Size = UDim2.new(0, 24, 0, 24)
-            reuseBtn.AnchorPoint = Vector2.new(1, 0.5)
-            reuseBtn.Position = UDim2.new(1, -4, 0.5, 0)
-            reuseBtn.BackgroundColor3 = Color3.fromRGB(31, 98, 143)
-            reuseBtn.Text = "🔄"
-            reuseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            reuseBtn.Font = Enum.Font.GothamBold
-            reuseBtn.TextSize = 11
+            reuseBtn.Size = UDim2.new(0, 20, 0, 20)
+            reuseBtn.Position = UDim2.new(1, -24, 0, 4)
+            reuseBtn.BackgroundTransparency = 1
+            reuseBtn.Text = "📋"
+            reuseBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+            reuseBtn.Font = Enum.Font.Gotham
+            reuseBtn.TextSize = 12
             reuseBtn.Parent = bubble
 
-            local reuseCorner = Instance.new("UICorner")
-            reuseCorner.CornerRadius = UDim.new(0, 6)
-            reuseCorner.Parent = reuseBtn
-
             reuseBtn.MouseButton1Click:Connect(function()
-                local foundUserEntryIndex = nil
-                for i, entry in ipairs(conversationHistory) do
-                    if entry.role == "user" and entry.parts and entry.parts[1] and entry.parts[1].text == text then
-                        foundUserEntryIndex = i
-                    end
-                end
-
-                if foundUserEntryIndex then
-                    table.remove(conversationHistory, foundUserEntryIndex)
-                    if conversationHistory[foundUserEntryIndex] and conversationHistory[foundUserEntryIndex].role == "model" then
-                        table.remove(conversationHistory, foundUserEntryIndex)
-                    end
-                    saveChatHistory(conversationHistory)
-                end
-
-                local nextBubble = bubble:GetPropertyChangedSignal("Parent") and bubble.NextSibling
-                if nextBubble then nextBubble:Destroy() end
-                bubble:Destroy()
-
-                sendQuery(text)
+                chatBox.Text = text:gsub("<[^<>]+>", "")
             end)
         end
 
-        task.wait(0.05)
-        chatScroll.CanvasPosition = Vector2.new(0, chatScroll.AbsoluteCanvasSize.Y)
+        task.defer(function()
+            chatScroll.CanvasPosition = Vector2.new(0, chatScroll.AbsoluteCanvasSize.Y)
+        end)
+
         return bubble
     end
 
+    sendQuery = function()
+        local txt = chatBox.Text
+        if txt:match("^%s*$") then return end
+        chatBox.Text = ""
+
+        appendMessage(localPlayer.Name, txt, true)
+
+        local lowerTxt = txt:lower()
+        if lowerTxt == "revert" or lowerTxt == "undo" then
+            local loadingBubble = appendMessage("GameBuddy", "<i>Reverting previous workspace state changes...</i>", false)
+            local res = performReversion()
+            loadingBubble:Destroy()
+            appendMessage("GameBuddy", processResponse(res, txt), false)
+            return
+        end
+
+        local loadingBubble = appendMessage("GameBuddy", "<i>Thinking...</i>", false)
+        task.spawn(function()
+            local rawRes = callGeminiAPI(txt)
+            loadingBubble:Destroy()
+            local finalRes = processResponse(rawRes, txt)
+            appendMessage("GameBuddy", finalRes, false)
+        end)
+    end
+
+    sendBtn.MouseButton1Click:Connect(sendQuery)
+    chatBox.FocusLost:Connect(function(enterPressed)
+        if enterPressed then sendQuery() end
+    end)
+
     if #conversationHistory > 0 then
-        for _, entry in ipairs(conversationHistory) do
-            local role = entry.role
-            local textParts = entry.parts and entry.parts[1] and entry.parts[1].text or ""
-            if role == "user" then
-                appendMessage("You", textParts, true)
-            elseif role == "model" then
-                appendMessage("GameBuddy", textParts, false)
+        for _, msg in ipairs(conversationHistory) do
+            local senderName = (msg.role == "user") and localPlayer.Name or "GameBuddy"
+            local textContent = msg.parts and msg.parts[1] and msg.parts[1].text or ""
+            if textContent ~= "" then
+                appendMessage(senderName, textContent, msg.role == "user")
             end
         end
     else
-        task.spawn(function()
-            appendMessage("GameBuddy", "Hello! I'm GameBuddy, your self-correcting AI assistant running on Xeno PC. Tell me what to modify, type 'revert' for undo, or 'reverts' / 'revertsmart' for smart reversion!", false)
-        end)
+        appendMessage("GameBuddy", "Hello " .. localPlayer.Name .. "! I am GameBuddy, your AI development assistant ready inside Xeno PC. How can I help you script or modify the game today?", false)
     end
-
-    sendQuery = function(text)
-        local trimmed = text:gsub("^%s*(.-)%s*$", "%1")
-        if trimmed == "" then return end
-
-        local lowerText = trimmed:lower()
-        if lowerText == "/clear" then
-            conversationHistory = {}
-            saveChatHistory(conversationHistory)
-            appendMessage("System", "<i>🗑️ Chat history cleared and reset!</i>", false)
-            return
-        elseif lowerText == "revert" or lowerText == "undo" then
-            appendMessage("You", text, true)
-            task.spawn(function()
-                local loading = appendMessage("GameBuddy", "<i>Reverting previous modifications and notifying API...</i>", false)
-                local revertRes = performReversion()
-                if loading and loading.Parent then loading:Destroy() end
-                appendMessage("GameBuddy", revertRes, false)
-            end)
-            return
-        elseif lowerText == "reverts" or lowerText == "revertsmart" then
-            appendMessage("You", text, true)
-            task.spawn(function()
-                local loading = appendMessage("GameBuddy", "<i>Analyzing past context and generating smart revert script...</i>", false)
-                local smartPrompt = "The user requested a smart revert ('reverts'). Look back at our chat history, figure out what changes were made to the workspace or parts, and write a custom [LUA] script to intelligently undo or reverse those modifications."
-                local raw = callGeminiAPI(smartPrompt)
-                local final = processResponse(raw, smartPrompt)
-                if loading and loading.Parent then loading:Destroy() end
-                appendMessage("GameBuddy", final, false)
-            end)
-            return
-        end
-
-        appendMessage("You", text, true)
-
-        task.spawn(function()
-            local loading = appendMessage("GameBuddy", "<i>Thinking and generating script...</i>", false)
-            local raw = callGeminiAPI(text)
-            local final = processResponse(raw, text)
-            if loading and loading.Parent then loading:Destroy() end
-            appendMessage("GameBuddy", final, false)
-        end)
-    end
-
-    sendBtn.MouseButton1Click:Connect(function()
-        local text = chatBox.Text
-        chatBox.Text = ""
-        sendQuery(text)
-    end)
-
-    chatBox.FocusLost:Connect(function(enterPressed)
-        if enterPressed then
-            local text = chatBox.Text
-            chatBox.Text = ""
-            sendQuery(text)
-        end
-    end)
-
-    errorCheckBtn.MouseButton1Click:Connect(function()
-        sendQuery("Please run a full error check diagnostic scan on my character, workspace part states, and recent log warnings, and report any issues.")
-    end)
-
-    local function openInspectWindow(targetObject)
-        local treePath = "Workspace"
-        if targetObject then
-            local pathParts = {}
-            local current = targetObject
-            while current and current ~= game do
-                table.insert(pathParts, 1, current.Name)
-                current = current.Parent
-            end
-            treePath = table.concat(pathParts, ">")
-        end
-
-        local subWin = Instance.new("Frame")
-        subWin.Size = UDim2.new(0.9, 0, 0.75, 0)
-        subWin.Position = UDim2.new(0.05, 0, 0.12, 0)
-        subWin.BackgroundColor3 = Color3.fromRGB(25, 28, 36)
-        subWin.BorderSizePixel = 0
-        subWin.ZIndex = 10
-        subWin.Parent = window
-
-        local subCorner = Instance.new("UICorner")
-        subCorner.CornerRadius = UDim.new(0, 10)
-        subCorner.Parent = subWin
-
-        local subHeader = Instance.new("Frame")
-        subHeader.Size = UDim2.new(1, 0, 0, 36)
-        subHeader.BackgroundColor3 = Color3.fromRGB(35, 39, 50)
-        subHeader.ZIndex = 11
-        subHeader.Parent = subWin
-
-        local subTitle = Instance.new("TextLabel")
-        subTitle.Size = UDim2.new(1, -40, 1, 0)
-        subTitle.Position = UDim2.new(0, 10, 0, 0)
-        subTitle.BackgroundTransparency = 1
-        subTitle.Text = "Inspect Part & Ask"
-        subTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-        subTitle.Font = Enum.Font.GothamBold
-        subTitle.TextSize = 13
-        subTitle.ZIndex = 12
-        subTitle.Parent = subHeader
-
-        local subClose = Instance.new("TextButton")
-        subClose.Size = UDim2.new(0, 24, 0, 24)
-        subClose.Position = UDim2.new(1, -28, 0, 6)
-        subClose.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
-        subClose.Text = "X"
-        subClose.TextColor3 = Color3.fromRGB(255, 255, 255)
-        subClose.ZIndex = 12
-        subClose.Parent = subHeader
-
-        subClose.MouseButton1Click:Connect(function() subWin:Destroy() end)
-
-        local contentScroll = Instance.new("ScrollingFrame")
-        contentScroll.Size = UDim2.new(1, -12, 1, -45)
-        contentScroll.Position = UDim2.new(0, 6, 0, 40)
-        contentScroll.BackgroundTransparency = 1
-        contentScroll.CanvasSize = UDim2.new(0, 0, 0, 250)
-        contentScroll.ZIndex = 11
-        contentScroll.Parent = subWin
-
-        local treeBox = Instance.new("TextBox")
-        treeBox.Size = UDim2.new(1, 0, 0, 32)
-        treeBox.Position = UDim2.new(0, 0, 0, 22)
-        treeBox.BackgroundColor3 = Color3.fromRGB(35, 39, 50)
-        treeBox.Text = treePath
-        treeBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-        treeBox.Font = Enum.Font.Code
-        treeBox.TextSize = 11
-        treeBox.ZIndex = 11
-        treeBox.Parent = contentScroll
-
-        local qBox = Instance.new("TextBox")
-        qBox.Size = UDim2.new(1, 0, 0, 50)
-        qBox.Position = UDim2.new(0, 0, 0, 75)
-        qBox.BackgroundColor3 = Color3.fromRGB(35, 39, 50)
-        qBox.PlaceholderText = "What does this do?"
-        qBox.Text = ""
-        qBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-        qBox.TextWrapped = true
-        qBox.ZIndex = 11
-        qBox.Parent = contentScroll
-
-        local okBtn = Instance.new("TextButton")
-        okBtn.Size = UDim2.new(1, 0, 0, 36)
-        okBtn.Position = UDim2.new(0, 0, 0, 140)
-        okBtn.BackgroundColor3 = Color3.fromRGB(41, 128, 185)
-        okBtn.Text = "OK - Send Question"
-        okBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        okBtn.ZIndex = 11
-        okBtn.Parent = contentScroll
-
-        okBtn.MouseButton1Click:Connect(function()
-            local finalTree = treeBox.Text ~= "" and treeBox.Text or "Workspace"
-            local finalQ = qBox.Text ~= "" and qBox.Text or "What does this do?"
-            subWin:Destroy()
-            sendQuery(string.format("[%s]:\"%s\"", finalTree, finalQ))
-        end)
-    end
-
-    openTreeBtn.MouseButton1Click:Connect(function()
-        openInspectWindow(nil)
-    end)
-
-    UserInputService.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            if not cptsEnabled then return end
-
-            local mousePos = UserInputService:GetMouseLocation()
-            local winPos = window.AbsolutePosition
-            local winSize = window.AbsoluteSize
-            
-            if mousePos.X >= winPos.X and mousePos.X <= winPos.X + winSize.X and
-               mousePos.Y >= winPos.Y and mousePos.Y <= winPos.Y + winSize.Y then
-                return
-            end
-
-            local unitRay = camera:ScreenPointToRay(mousePos.X, mousePos.Y)
-            local raycastParams = RaycastParams.new()
-            raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-            if localPlayer.Character then
-                raycastParams.FilterDescendantsInstances = {localPlayer.Character}
-            end
-
-            local raycastResult = Workspace:Raycast(unitRay.Origin, unitRay.Direction * 1000, raycastParams)
-            if raycastResult and raycastResult.Instance then
-                openInspectWindow(raycastResult.Instance)
-            end
-        end
-    end)
 end
 
-buildSetupUI()
-
-closeBtn.MouseButton1Click:Connect(function() window.Visible = false end)
-minimizeBtn.MouseButton1Click:Connect(function() window.Visible = false end)
+if rawStoredHistory and #rawStoredHistory > 0 then
+    buildMemoryPromptUI()
+else
+    buildChatUI()
+end
